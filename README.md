@@ -1,14 +1,10 @@
 # Simple Daily Notes
 
-A plugin for you to edit a bunch of daily notes in one page (inline), providing a streamlined interface similar to Roam Research's daily note view.
-
-![Daily-Note-View](https://raw.githubusercontent.com/Quorafind/Obsidian-Daily-Notes-Editor/master/image/Daily-Note-View.gif)
+A streamlined interface to edit multiple daily notes in a single continuous inline page, providing an experience similar to Roam Research's daily note view.
 
 # Features
 
 - **Unified View**: Edit multiple daily notes in a single, continuous inline page.
-    - Open via command palette.
-    - Open via the left ribbon icon.
 - **Advanced Filtering**: View and filter notes by various time ranges:
     - Week, Month, Year, Quarter
     - Last Week, Last Month, Last Year, Last Quarter
@@ -31,7 +27,7 @@ A plugin for you to edit a bunch of daily notes in one page (inline), providing 
 
 # Installation
 
-1. Install from the Obsidian Community Plugins directory.
+1. Clone this repository and follow the build instructions.
 
 # Settings
 
