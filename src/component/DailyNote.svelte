@@ -247,9 +247,14 @@
         display: flex;
         align-items: center;
         justify-content: start;
-
+ 
         gap: var(--size-4-2);
     }
+
+    .daily-note-title:has(.collapse-button[data-collapsed="true"]) {
+        margin-bottom: 0;
+    }
+
 
     .collapse-button {
         margin-left: calc(var(--size-4-8) * -1);
