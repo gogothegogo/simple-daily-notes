@@ -10,7 +10,7 @@ import {
     App,
     ButtonComponent,
 } from "obsidian";
-import { TimeRange, TimeField } from "./types/time";
+import { TimeRange, TimeField, SelectionMode } from "./types/time";
 import DailyNoteEditorView from "./component/DailyNoteEditorView.svelte";
 export const DAILY_NOTE_VIEW_TYPE = "daily-note-editor-view";
 
@@ -19,13 +19,33 @@ export function isEmebeddedLeaf(leaf: WorkspaceLeaf) {
     return (leaf as any).containerEl.matches(".dn-leaf-view");
 }
 
+function isoToDateRange(
+    r: { start: string; end: string } | null
+): { start: Date; end: Date } | null {
+    if (!r) return null;
+    return { start: new Date(r.start), end: new Date(r.end) };
+}
+
+function dateRangeToIso(
+    r: { start: Date; end: Date } | null
+): { start: string; end: string } | null {
+    if (!r) return null;
+    const fmt = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+    };
+    return { start: fmt(r.start), end: fmt(r.end) };
+}
+
 export class DailyNoteView extends ItemView {
     view: DailyNoteEditorView;
     plugin: DailyNoteViewPlugin;
     scope: Scope;
 
     selectedDaysRange: TimeRange = "all";
-    selectionMode: "daily" | "folder" | "tag" = "daily";
+    selectionMode: SelectionMode = "daily";
     target: string = "";
     timeField: TimeField = "mtime";
 
@@ -38,7 +58,47 @@ export class DailyNoteView extends ItemView {
         super(leaf);
         this.plugin = plugin;
 
+        // Hydrate from saved plugin settings so the view honors them on every open.
+        const s = plugin.settings;
+        this.selectionMode = s.selectionMode;
+        this.target = s.target;
+        this.timeField = s.timeField;
+        this.selectedDaysRange = s.selectedRange;
+        this.customRange = isoToDateRange(s.customRange);
+
         this.scope = new Scope(plugin.app.scope);
+    }
+
+    private persistViewState() {
+        this.plugin.settings.selectionMode = this.selectionMode;
+        this.plugin.settings.target = this.target;
+        this.plugin.settings.timeField = this.timeField;
+        this.plugin.settings.selectedRange = this.selectedDaysRange;
+        this.plugin.settings.customRange = dateRangeToIso(this.customRange);
+        this.plugin.saveSettings();
+    }
+
+    /**
+     * Push current plugin settings into this view's Svelte component.
+     * Called by the plugin when settings change in the settings tab.
+     */
+    public applyPluginSettings() {
+        const s = this.plugin.settings;
+        this.selectionMode = s.selectionMode;
+        this.target = s.target;
+        this.timeField = s.timeField;
+        this.selectedDaysRange = s.selectedRange;
+        this.customRange = isoToDateRange(s.customRange);
+        if (this.view) {
+            this.view.$set({
+                selectionMode: this.selectionMode,
+                target: this.target,
+                timeField: this.timeField,
+                selectedRange: this.selectedDaysRange,
+                customRange: this.customRange,
+                footerNotePath: s.footerNotePath,
+            });
+        }
     }
 
     getMode = () => {
@@ -91,9 +151,10 @@ export class DailyNoteView extends ItemView {
                 this.view.$set({ selectedRange: range });
             }
         }
+        this.persistViewState();
     }
 
-    setSelectionMode(mode: "daily" | "folder" | "tag", target: string = "") {
+    setSelectionMode(mode: SelectionMode, target: string = "") {
         this.selectionMode = mode;
         this.target = target;
 
@@ -103,6 +164,7 @@ export class DailyNoteView extends ItemView {
                 target: target,
             });
         }
+        this.persistViewState();
     }
 
     saveCurrentSelectionAsPreset() {
@@ -138,24 +200,11 @@ export class DailyNoteView extends ItemView {
 
     async setState(state: unknown, result?: any): Promise<void> {
         await super.setState(state, result);
-        // Handle our custom state properties if they exist
         if (state && typeof state === "object" && !this.view) {
-            const customState = state as {
-                selectionMode?: "daily" | "folder" | "tag";
-                target?: string;
-                timeField?: TimeField;
-                selectedRange?: TimeRange;
-                customRange?: { start: Date; end: Date } | null;
-            };
-
-            if (customState.selectionMode)
-                this.selectionMode = customState.selectionMode;
-            if (customState.target) this.target = customState.target;
-            if (customState.timeField) this.timeField = customState.timeField;
-            if (customState.selectedRange)
-                this.selectedDaysRange = customState.selectedRange;
-            if (customState.customRange)
-                this.customRange = customState.customRange;
+            // Plugin settings are the source of truth for these fields — they
+            // were already loaded into `this` in the constructor. Per-leaf
+            // saved state is intentionally ignored so reopening the view
+            // always reflects the user's current settings.
 
             this.view = new DailyNoteEditorView({
                 target: this.contentEl,
@@ -167,6 +216,7 @@ export class DailyNoteView extends ItemView {
                     selectionMode: this.selectionMode,
                     target: this.target,
                     timeField: this.timeField,
+                    footerNotePath: this.plugin.settings.footerNotePath,
                 },
             });
 
@@ -185,6 +235,7 @@ export class DailyNoteView extends ItemView {
         if (this.view) {
             this.view.$set({ timeField: field });
         }
+        this.persistViewState();
     }
 
     openDailyNoteEditor() {
@@ -332,6 +383,8 @@ export class DailyNoteView extends ItemView {
                 item.onClick(() => {
                     const modal = new CustomRangeModal(this.app, (range) => {
                         this.customRange = range;
+                        // setSelectedRange persists, which serializes the
+                        // freshly-set customRange too.
                         this.setSelectedRange("custom");
                     });
                     modal.open();

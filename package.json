@@ -1,6 +1,6 @@
 {
     "name": "simple-daily-notes",
-    "version": "1.1.2",
+    "version": "1.1.4",
     "description": "A streamlined interface to edit multiple daily notes in a single continuous inline page, providing an experience similar to Roam Research's daily note view.",
     "main": "main.js",
     "scripts": {

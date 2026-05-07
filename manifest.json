@@ -1,7 +1,7 @@
 {
 	"id": "simple-daily-notes",
 	"name": "Simple Daily Notes",
-	"version": "1.1.2",
+	"version": "1.1.4",
 	"minAppVersion": "1.4.0",
 	"description": "A streamlined interface to edit multiple daily notes in a single continuous inline page, providing an experience similar to Roam Research's daily note view.",
 	"author": "gogothegogo",

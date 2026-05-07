@@ -1,11 +1,20 @@
 import DailyNoteViewPlugin from "./dailyNoteViewIndex";
 import { App, debounce, PluginSettingTab, Setting, Modal } from "obsidian";
+import { SelectionMode, TimeField, TimeRange } from "./types/time";
 
 export interface DailyNoteSettings {
     hideFrontmatter: boolean;
     hideBacklinks: boolean;
     createAndOpenOnStartup: boolean;
     useArrowUpOrDownToNavigate: boolean;
+
+    selectionMode: SelectionMode;
+    target: string;
+    timeField: TimeField;
+    selectedRange: TimeRange;
+    customRange: { start: string; end: string } | null;
+
+    footerNotePath: string;
 
     preset: {
         type: "folder" | "tag";
@@ -18,6 +27,15 @@ export const DEFAULT_SETTINGS: DailyNoteSettings = {
     hideBacklinks: false,
     createAndOpenOnStartup: false,
     useArrowUpOrDownToNavigate: false,
+
+    selectionMode: "daily",
+    target: "",
+    timeField: "mtime",
+    selectedRange: "all",
+    customRange: null,
+
+    footerNotePath: "",
+
     preset: [],
 };
 
@@ -115,6 +133,162 @@ export class DailyNoteSettingTab extends PluginSettingTab {
                     .onChange(async (value) => {
                         this.plugin.settings.useArrowUpOrDownToNavigate = value;
                         this.applySettingsUpdate();
+                    })
+            );
+
+        new Setting(containerEl).setName("View defaults").setHeading();
+
+        const persistAndApply = () => {
+            this.applySettingsUpdate();
+            this.plugin.applySettingsToOpenViews();
+        };
+
+        new Setting(containerEl)
+            .setName("View mode")
+            .setDesc(
+                "What the view shows when opened. Folder/Tag require a target below."
+            )
+            .addDropdown((dd) =>
+                dd
+                    .addOption("daily", "Daily Notes")
+                    .addOption("folder", "Folder")
+                    .addOption("tag", "Tag")
+                    .setValue(settings.selectionMode)
+                    .onChange((value) => {
+                        this.plugin.settings.selectionMode =
+                            value as SelectionMode;
+                        persistAndApply();
+                        this.debounceDisplay();
+                    })
+            );
+
+        if (settings.selectionMode !== "daily") {
+            new Setting(containerEl)
+                .setName(
+                    settings.selectionMode === "folder"
+                        ? "Folder path"
+                        : "Tag name"
+                )
+                .setDesc(
+                    settings.selectionMode === "folder"
+                        ? "Folder to display (e.g., '00_CAPTURE' or 'parent/child')"
+                        : "Tag name without the '#' (e.g., 'project')"
+                )
+                .addText((text) =>
+                    text
+                        .setPlaceholder(
+                            settings.selectionMode === "folder"
+                                ? "folder/subfolder"
+                                : "tag"
+                        )
+                        .setValue(settings.target)
+                        .onChange((value) => {
+                            this.plugin.settings.target = value.trim();
+                            persistAndApply();
+                        })
+                );
+        }
+
+        new Setting(containerEl)
+            .setName("Date range")
+            .setDesc("Which time window of files to show.")
+            .addDropdown((dd) =>
+                dd
+                    .addOption("all", "All Notes")
+                    .addOption("week", "This Week")
+                    .addOption("month", "This Month")
+                    .addOption("year", "This Year")
+                    .addOption("last-week", "Last Week")
+                    .addOption("last-month", "Last Month")
+                    .addOption("last-year", "Last Year")
+                    .addOption("quarter", "This Quarter")
+                    .addOption("last-quarter", "Last Quarter")
+                    .addOption("custom", "Custom Date Range")
+                    .setValue(settings.selectedRange)
+                    .onChange((value) => {
+                        this.plugin.settings.selectedRange =
+                            value as TimeRange;
+                        persistAndApply();
+                        this.debounceDisplay();
+                    })
+            );
+
+        if (settings.selectedRange === "custom") {
+            const today = new Date().toISOString().slice(0, 10);
+            const current = settings.customRange ?? {
+                start: today,
+                end: today,
+            };
+            if (!settings.customRange) {
+                this.plugin.settings.customRange = current;
+                this.applySettingsUpdate();
+            }
+
+            new Setting(containerEl)
+                .setName("Custom range — start date")
+                .addText((text) => {
+                    (text.inputEl as HTMLInputElement).type = "date";
+                    text.setValue(current.start).onChange((value) => {
+                        const next = {
+                            start: value,
+                            end:
+                                this.plugin.settings.customRange?.end ??
+                                current.end,
+                        };
+                        this.plugin.settings.customRange = next;
+                        persistAndApply();
+                    });
+                });
+
+            new Setting(containerEl)
+                .setName("Custom range — end date")
+                .addText((text) => {
+                    (text.inputEl as HTMLInputElement).type = "date";
+                    text.setValue(current.end).onChange((value) => {
+                        const next = {
+                            start:
+                                this.plugin.settings.customRange?.start ??
+                                current.start,
+                            end: value,
+                        };
+                        this.plugin.settings.customRange = next;
+                        persistAndApply();
+                    });
+                });
+        }
+
+        new Setting(containerEl)
+            .setName("Sort by")
+            .setDesc("Time field used for sorting and time-range filtering.")
+            .addDropdown((dd) =>
+                dd
+                    .addOption("mtime", "Modification Time")
+                    .addOption("ctime", "Creation Time")
+                    .addOption("mtimeReverse", "Modification Time (Reverse)")
+                    .addOption("ctimeReverse", "Creation Time (Reverse)")
+                    .addOption("name", "Name (A-Z)")
+                    .addOption("nameReverse", "Name (Z-A)")
+                    .setValue(settings.timeField)
+                    .onChange((value) => {
+                        this.plugin.settings.timeField = value as TimeField;
+                        persistAndApply();
+                    })
+            );
+
+        new Setting(containerEl).setName("Footer note").setHeading();
+
+        new Setting(containerEl)
+            .setName("Footer note path")
+            .setDesc(
+                "Vault path to a note rendered after all listed notes (e.g., 'Templates/Weekly Tasks.md'). Leave empty to disable. The same note is shown regardless of the active view mode."
+            )
+            .addText((text) =>
+                text
+                    .setPlaceholder("Templates/Weekly Tasks.md")
+                    .setValue(settings.footerNotePath)
+                    .onChange((value) => {
+                        this.plugin.settings.footerNotePath = value.trim();
+                        persistAndApply();
                     })
             );
 

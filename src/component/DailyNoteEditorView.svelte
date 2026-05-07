@@ -16,9 +16,22 @@
     export let selectionMode: SelectionMode = "daily";
     export let target: string = "";
     export let timeField: TimeField = "mtime";
+    export let footerNotePath: string = "";
 
     let filteredFiles: TFile[] = [];
     let fileManager: FileManager;
+
+    function resolveFooterFile(path: string): TFile | null {
+        const trimmed = (path || "").trim();
+        if (!trimmed) return null;
+        const direct = plugin.app.vault.getAbstractFileByPath(trimmed);
+        if (direct instanceof TFile) return direct;
+        const withMd = plugin.app.vault.getAbstractFileByPath(trimmed + ".md");
+        if (withMd instanceof TFile) return withMd;
+        return null;
+    }
+
+    $: footerFile = resolveFooterFile(footerNotePath);
 
     $: fileManagerOptions = {
         mode: selectionMode,
@@ -152,6 +165,17 @@
             />
         </div>
     {/each}
+    {#if footerFile}
+        <div class="daily-note-wrapper daily-note-footer" data-footer-path={footerFile.path}>
+            {#key footerFile.path}
+                <DailyNote
+                    file={footerFile}
+                    plugin={plugin}
+                    leaf={leaf}
+                />
+            {/key}
+        </div>
+    {/if}
 </div>
 
 
