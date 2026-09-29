@@ -72,6 +72,36 @@ export default class DailyNoteViewPlugin extends Plugin {
             callback: () => this.openDailyNoteEditor(),
         });
 
+        const withActiveView = (fn: (view: DailyNoteView) => boolean) =>
+            (checking: boolean) => {
+                const view = this.app.workspace.getActiveViewOfType(DailyNoteView);
+                if (!view) return false;
+                if (checking) return true;
+                fn(view);
+                return true;
+            };
+
+        this.addCommand({
+            id: "previous-note",
+            name: "Previous note (single note view)",
+            checkCallback: withActiveView((view) => view.navigateNote(-1)),
+        });
+
+        this.addCommand({
+            id: "next-note",
+            name: "Next note (single note view)",
+            checkCallback: withActiveView((view) => view.navigateNote(1)),
+        });
+
+        this.addCommand({
+            id: "toggle-layout",
+            name: "Toggle list / single note view",
+            checkCallback: withActiveView((view) => {
+                view.setLayoutMode(view.layoutMode === "single" ? "list" : "single");
+                return true;
+            }),
+        });
+
         this.initCssRules();
 
         // Create daily note and open the Simple Daily Notes on startup if enabled

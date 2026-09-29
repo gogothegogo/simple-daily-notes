@@ -1,7 +1,7 @@
 <script lang="ts">
     import type DailyNoteViewPlugin from "../dailyNoteViewIndex";
     import { TAbstractFile, TFile, WorkspaceLeaf } from "obsidian";
-    import { spawnLeafView } from "../leafView";
+    import { spawnLeafView, DailyNoteEditor } from "../leafView";
     import { onDestroy, onMount } from "svelte";
 
     export let file: TAbstractFile;
@@ -12,7 +12,13 @@
     let title: string;
 
     let createdLeaf: WorkspaceLeaf;
+    let editor: DailyNoteEditor;
     let isCollapsed: boolean = false;
+    let destroyed = false;
+
+    // Other plugins' leaf/editor hooks (seen with Ink 0.5.7) can make the first
+    // setViewState resolve with an "empty" view. Retry a few times with backoff.
+    const OPEN_MAX_ATTEMPTS = 4;
 
     onMount(() => {
         if (file instanceof TFile) {
@@ -22,6 +28,7 @@
     });
 
     onDestroy(() => {
+        destroyed = true;
         if (createdLeaf?.detach) {
             try {
                 createdLeaf.detach();
@@ -36,10 +43,23 @@
         if (!editorEl) return;
 
         try {
-            [createdLeaf] = spawnLeafView(plugin, editorEl, leaf);
+            // Open the file only once the popover is attached to the DOM
+            // (onShowCallback), not while the leaf is still detached.
+            [createdLeaf, editor] = spawnLeafView(plugin, editorEl, leaf, () => {
+                void openFileInLeaf(1);
+            });
             createdLeaf.setPinned(true);
+            createdLeaf.parentLeaf = leaf;
+        } catch (error) {
+            console.error("Error creating leaf view:", error);
+        }
+    }
 
-            createdLeaf.setViewState({
+    async function openFileInLeaf(attempt: number) {
+        if (destroyed || !createdLeaf || !(file instanceof TFile)) return;
+
+        try {
+            await createdLeaf.setViewState({
                 type: "markdown",
                 state: {
                     file: file.path,
@@ -57,9 +77,17 @@
                     }
                 }
             });
-            createdLeaf.parentLeaf = leaf;
         } catch (error) {
-            console.error("Error creating leaf view:", error);
+            console.error("Error opening file in daily note leaf:", error);
+        }
+
+        if (destroyed) return;
+        const opened = createdLeaf.view?.getViewType() === "markdown";
+        if (opened) editor?.stripViewChrome();
+        if (!opened && attempt < OPEN_MAX_ATTEMPTS) {
+            window.setTimeout(() => void openFileInLeaf(attempt + 1), 150 * attempt);
+        } else if (!opened) {
+            console.warn(`Simple Daily Notes: could not open ${file.path} after ${attempt} attempts`);
         }
     }
 

@@ -19,3 +19,5 @@ export type TimeField =
     | "mtimeReverse"
     | "name"
     | "nameReverse";
+
+export type LayoutMode = "list" | "single";

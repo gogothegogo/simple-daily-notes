@@ -2,9 +2,10 @@
     import type DailyNoteViewPlugin from "../dailyNoteViewIndex";
     import type { WorkspaceLeaf } from "obsidian";
 
-    import { TFile, moment } from "obsidian";
+    import { TFile, moment, setIcon } from "obsidian";
+    import { getDateFromFile } from "obsidian-daily-notes-interface";
     import DailyNote from "./DailyNote.svelte";
-    import { TimeRange, SelectionMode, TimeField } from "../types/time";
+    import { TimeRange, SelectionMode, TimeField, LayoutMode } from "../types/time";
     import { onMount } from "svelte";
     import { FileManager, FileManagerOptions } from "../utils/fileManager";
 
@@ -17,9 +18,74 @@
     export let target: string = "";
     export let timeField: TimeField = "mtime";
     export let footerNotePath: string = "";
+    export let layoutMode: LayoutMode = "list";
 
     let filteredFiles: TFile[] = [];
     let fileManager: FileManager;
+
+    // Single note view: which note is shown, tracked by path so it survives
+    // list refreshes. null means "pick the default" (today, or the first note).
+    let currentPath: string | null = null;
+    let lastIndex = -1;
+
+    $: currentIndex = pickIndex(filteredFiles, currentPath);
+    $: currentFile = currentIndex >= 0 ? filteredFiles[currentIndex] : null;
+    $: lastIndex = currentIndex;
+
+    function defaultIndex(files: TFile[]): number {
+        if (files.length === 0) return -1;
+        if (selectionMode !== "daily") return 0;
+
+        // Today's note, otherwise the note closest to today.
+        const today = moment().startOf("day");
+        let best = 0;
+        let bestDiff = Infinity;
+        files.forEach((f, i) => {
+            const date = getDateFromFile(f as any, "day");
+            if (!date) return;
+            const diff = Math.abs(date.diff(today, "days"));
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = i;
+            }
+        });
+        return best;
+    }
+
+    function pickIndex(files: TFile[], path: string | null): number {
+        if (files.length === 0) return -1;
+        const found = path ? files.findIndex((f) => f.path === path) : -1;
+        if (found >= 0) return found;
+        // The shown note disappeared (deleted, renamed): stay near where we were.
+        if (path && lastIndex >= 0) return Math.min(lastIndex, files.length - 1);
+        return defaultIndex(files);
+    }
+
+    export function navigate(step: number): boolean {
+        // Recompute rather than read currentIndex: it updates only after a tick,
+        // so rapid repeated calls would all start from the same stale index.
+        const index = pickIndex(filteredFiles, currentPath);
+        if (layoutMode !== "single" || index < 0) return false;
+        const next = index + step;
+        if (next < 0 || next >= filteredFiles.length) return false;
+        currentPath = filteredFiles[next].path;
+        return true;
+    }
+
+    function goToDefault() {
+        const i = defaultIndex(filteredFiles);
+        currentPath = i >= 0 ? filteredFiles[i].path : null;
+    }
+
+    function icon(node: HTMLElement, name: string) {
+        setIcon(node, name);
+        return {
+            update(newName: string) {
+                node.empty();
+                setIcon(node, newName);
+            },
+        };
+    }
 
     function resolveFooterFile(path: string): TFile | null {
         const trimmed = (path || "").trim();
@@ -55,6 +121,9 @@
             timeField: timeField
         });
         filteredFiles = fileManager.getFilteredFiles();
+        // Scope changed: start again from today / the first note.
+        currentPath = null;
+        lastIndex = -1;
         updateTitleElement();
     }
 
@@ -101,6 +170,7 @@
         const newNote = await fileManager.createNewDailyNote();
         if (newNote) {
             filteredFiles = [newNote, ...filteredFiles];
+            currentPath = newNote.path;
         }
     }
 
@@ -156,15 +226,52 @@
             </div>
         </div>
     {/if}
-    {#each filteredFiles as file (file.path)}
-        <div class="daily-note-wrapper">
-            <DailyNote
-                file={file}
-                plugin={plugin}
-                leaf={leaf}
-            />
-        </div>
-    {/each}
+    {#if layoutMode === "single"}
+        {#if currentFile}
+            <div class="dn-single-nav">
+                <button
+                    class="clickable-icon dn-nav-btn"
+                    aria-label="Previous note"
+                    disabled={currentIndex <= 0}
+                    on:click={() => navigate(-1)}
+                    use:icon={"chevron-left"}
+                ></button>
+                <div class="dn-nav-center">
+                    <span class="dn-nav-title">{currentFile.basename}</span>
+                    <span class="dn-nav-count">{currentIndex + 1} / {filteredFiles.length}</span>
+                </div>
+                {#if selectionMode === "daily"}
+                    <button class="dn-nav-today" aria-label="Go to today's note" on:click={goToDefault}>Today</button>
+                {/if}
+                <button
+                    class="clickable-icon dn-nav-btn"
+                    aria-label="Next note"
+                    disabled={currentIndex >= filteredFiles.length - 1}
+                    on:click={() => navigate(1)}
+                    use:icon={"chevron-right"}
+                ></button>
+            </div>
+            {#key currentFile.path}
+                <div class="daily-note-wrapper">
+                    <DailyNote
+                        file={currentFile}
+                        plugin={plugin}
+                        leaf={leaf}
+                    />
+                </div>
+            {/key}
+        {/if}
+    {:else}
+        {#each filteredFiles as file (file.path)}
+            <div class="daily-note-wrapper">
+                <DailyNote
+                    file={file}
+                    plugin={plugin}
+                    leaf={leaf}
+                />
+            </div>
+        {/each}
+    {/if}
     {#if footerFile}
         <div class="daily-note-wrapper daily-note-footer" data-footer-path={footerFile.path}>
             {#key footerFile.path}
@@ -218,5 +325,50 @@
 
     .daily-note-wrapper {
         width: 100%;
+    }
+
+    .dn-single-nav {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: var(--size-4-2);
+        max-width: var(--file-line-width);
+        margin: 0 auto var(--size-4-2);
+        padding: var(--size-4-2) 0;
+        background-color: var(--background-primary);
+        border-bottom: 1px solid var(--background-modifier-border);
+    }
+
+    .dn-nav-center {
+        flex: 1;
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: var(--size-4-2);
+        min-width: 0;
+    }
+
+    .dn-nav-title {
+        font-weight: var(--font-semibold);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dn-nav-count {
+        color: var(--text-muted);
+        font-size: var(--font-ui-small);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dn-nav-btn[disabled] {
+        opacity: 0.3;
+        cursor: default;
+    }
+
+    .dn-nav-today {
+        font-size: var(--font-ui-small);
     }
 </style>

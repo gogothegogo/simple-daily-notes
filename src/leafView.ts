@@ -296,19 +296,23 @@ export class DailyNoteEditor extends nosuper(HoverPopover) {
             this.parent.DailyNoteEditor = this;
         }
 
-        // Remove original view header;
-        const viewHeaderEl = this.hoverEl.querySelector(".view-header");
-        viewHeaderEl?.remove();
-
         const sizer = this.hoverEl.querySelector(".workspace-leaf");
         if (sizer) this.hoverEl.appendChild(sizer);
 
-        // Remove original inline tilte;
-        const inlineTitle = this.hoverEl.querySelector(".inline-title");
-        if (inlineTitle) inlineTitle.remove();
+        this.stripViewChrome();
 
         this.onShowCallback?.();
         this.onShowCallback = undefined; // only call it once
+    }
+
+    /**
+     * Remove the embedded view's own header and inline title; the daily note
+     * card renders its own title. Call again after the leaf opens a file,
+     * since the view (and its chrome) may be created after onShow().
+     */
+    stripViewChrome() {
+        this.hoverEl.querySelector(".view-header")?.remove();
+        this.hoverEl.querySelector(".inline-title")?.remove();
     }
 
     detect(el: HTMLElement) {

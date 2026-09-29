@@ -10,7 +10,7 @@ import {
     App,
     ButtonComponent,
 } from "obsidian";
-import { TimeRange, TimeField, SelectionMode } from "./types/time";
+import { TimeRange, TimeField, SelectionMode, LayoutMode } from "./types/time";
 import DailyNoteEditorView from "./component/DailyNoteEditorView.svelte";
 export const DAILY_NOTE_VIEW_TYPE = "daily-note-editor-view";
 
@@ -48,6 +48,7 @@ export class DailyNoteView extends ItemView {
     selectionMode: SelectionMode = "daily";
     target: string = "";
     timeField: TimeField = "mtime";
+    layoutMode: LayoutMode = "list";
 
     customRange: {
         start: Date;
@@ -65,6 +66,7 @@ export class DailyNoteView extends ItemView {
         this.timeField = s.timeField;
         this.selectedDaysRange = s.selectedRange;
         this.customRange = isoToDateRange(s.customRange);
+        this.layoutMode = s.layoutMode;
 
         this.scope = new Scope(plugin.app.scope);
     }
@@ -75,6 +77,7 @@ export class DailyNoteView extends ItemView {
         this.plugin.settings.timeField = this.timeField;
         this.plugin.settings.selectedRange = this.selectedDaysRange;
         this.plugin.settings.customRange = dateRangeToIso(this.customRange);
+        this.plugin.settings.layoutMode = this.layoutMode;
         this.plugin.saveSettings();
     }
 
@@ -89,8 +92,10 @@ export class DailyNoteView extends ItemView {
         this.timeField = s.timeField;
         this.selectedDaysRange = s.selectedRange;
         this.customRange = isoToDateRange(s.customRange);
+        this.layoutMode = s.layoutMode;
         if (this.view) {
             this.view.$set({
+                layoutMode: this.layoutMode,
                 selectionMode: this.selectionMode,
                 target: this.target,
                 timeField: this.timeField,
@@ -195,6 +200,7 @@ export class DailyNoteView extends ItemView {
             timeField: this.timeField,
             selectedRange: this.selectedDaysRange,
             customRange: this.customRange,
+            layoutMode: this.layoutMode,
         };
     }
 
@@ -217,6 +223,7 @@ export class DailyNoteView extends ItemView {
                     target: this.target,
                     timeField: this.timeField,
                     footerNotePath: this.plugin.settings.footerNotePath,
+                    layoutMode: this.layoutMode,
                 },
             });
 
@@ -238,6 +245,20 @@ export class DailyNoteView extends ItemView {
         this.persistViewState();
     }
 
+    setLayoutMode(mode: LayoutMode) {
+        this.layoutMode = mode;
+        if (this.view) {
+            this.view.$set({ layoutMode: mode });
+        }
+        this.persistViewState();
+    }
+
+    /** Single note view: step through the filtered notes. -1 = previous, 1 = next. */
+    navigateNote(step: number): boolean {
+        if (!this.view || this.layoutMode !== "single") return false;
+        return this.view.navigate(step);
+    }
+
     openDailyNoteEditor() {
         this.plugin.openDailyNoteEditor();
     }
@@ -245,6 +266,26 @@ export class DailyNoteView extends ItemView {
     async onOpen(): Promise<void> {
         this.scope.register(["Mod"], "f", (e) => {
             // do-nothing
+        });
+
+        // Added first, so it renders rightmost in the view header.
+        this.addAction("layout-list", "Select layout", (e) => {
+            const menu = new Menu();
+            const addLayoutOption = (title: string, icon: string, mode: LayoutMode) => {
+                menu.addItem((item) => {
+                    item.setTitle(title);
+                    item.setIcon(icon);
+                    item.setChecked(this.layoutMode === mode);
+                    item.onClick(() => {
+                        this.setLayoutMode(mode);
+                    });
+                });
+            };
+
+            addLayoutOption("List view", "layout-list", "list");
+            addLayoutOption("Single note view", "square", "single");
+
+            menu.showAtMouseEvent(e);
         });
 
         this.addAction("clock", "Select time field", (e) => {

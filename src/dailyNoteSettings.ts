@@ -1,6 +1,6 @@
 import DailyNoteViewPlugin from "./dailyNoteViewIndex";
 import { App, debounce, PluginSettingTab, Setting, Modal } from "obsidian";
-import { SelectionMode, TimeField, TimeRange } from "./types/time";
+import { LayoutMode, SelectionMode, TimeField, TimeRange } from "./types/time";
 
 export interface DailyNoteSettings {
     hideFrontmatter: boolean;
@@ -8,6 +8,7 @@ export interface DailyNoteSettings {
     createAndOpenOnStartup: boolean;
     useArrowUpOrDownToNavigate: boolean;
 
+    layoutMode: LayoutMode;
     selectionMode: SelectionMode;
     target: string;
     timeField: TimeField;
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS: DailyNoteSettings = {
     createAndOpenOnStartup: false,
     useArrowUpOrDownToNavigate: false,
 
+    layoutMode: "list",
     selectionMode: "daily",
     target: "",
     timeField: "mtime",
@@ -142,6 +144,22 @@ export class DailyNoteSettingTab extends PluginSettingTab {
             this.applySettingsUpdate();
             this.plugin.applySettingsToOpenViews();
         };
+
+        new Setting(containerEl)
+            .setName("Layout")
+            .setDesc(
+                "List shows every note in the range on one page. Single note shows one note at a time with previous/next arrows through the same range."
+            )
+            .addDropdown((dd) =>
+                dd
+                    .addOption("list", "List view")
+                    .addOption("single", "Single note view")
+                    .setValue(settings.layoutMode)
+                    .onChange((value) => {
+                        this.plugin.settings.layoutMode = value as LayoutMode;
+                        persistAndApply();
+                    })
+            );
 
         new Setting(containerEl)
             .setName("View mode")
