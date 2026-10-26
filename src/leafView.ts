@@ -176,11 +176,11 @@ export class DailyNoteEditor extends nosuper(HoverPopover) {
     }
 
     _setActive(evt: MouseEvent) {
-        // Form controls rendered inside the note (e.g. by other plugins' code blocks) need the default
-        // mousedown, or dropdowns never open and text fields never get focus. Activate the leaf without
-        // moving focus to the editor.
+        // Form controls and draggable elements rendered inside the note (e.g. by other plugins' code blocks)
+        // need the default mousedown, or dropdowns never open, text fields never get focus and drags never
+        // start. Activate the leaf without moving focus to the editor.
         const target = evt.target as HTMLElement | null;
-        if (target?.closest?.("select, input, textarea, button, label")) {
+        if (target?.closest?.('select, input, textarea, button, label, [draggable="true"]')) {
             this.plugin.app.workspace.setActiveLeaf(this.leaves()[0], {focus: false});
             return;
         }
