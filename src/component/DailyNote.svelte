@@ -98,7 +98,10 @@
         } else plugin.app.workspace.getLeaf(false).openFile(file);
     }
 
-    function handleEditorClick() {
+    function handleEditorClick(evt: MouseEvent) {
+        // Leave focus on form controls rendered inside the note, or an open dropdown closes right away
+        const target = evt.target as HTMLElement | null;
+        if (target?.closest?.("select, input, textarea, button, label")) return;
         // @ts-ignore
         const editor = createdLeaf?.view?.editMode?.editor;
         if (editor && !editor.hasFocus()) {
