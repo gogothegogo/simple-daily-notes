@@ -7,20 +7,17 @@ export interface AutoResizeSettings {
     lockedWide: boolean;
     autoResize: boolean;
     hoverDelayMs: number;
-    sidebarFullWidth: number;
-    sidebarSmallWidth: number;
-    paneFullGrow: number;
-    paneSmallGrow: number;
+    /** Widths as a percentage of the Obsidian window width */
+    fullWidthPct: number;
+    smallWidthPct: number;
 }
 
 export const AUTO_RESIZE_DEFAULTS: AutoResizeSettings = {
     lockedWide: false,
     autoResize: true,
     hoverDelayMs: 500,
-    sidebarFullWidth: 980,
-    sidebarSmallWidth: 400,
-    paneFullGrow: 3,
-    paneSmallGrow: 1,
+    fullWidthPct: 50,
+    smallWidthPct: 21,
 };
 
 /**
@@ -52,12 +49,7 @@ export class AutoResize {
     stop() {
         this.clearTimer();
         this.setManaged(new Set());
-        for (const v of [
-            "--sdn-sidebar-full",
-            "--sdn-sidebar-small",
-            "--sdn-pane-full",
-            "--sdn-pane-small",
-        ]) {
+        for (const v of ["--sdn-full", "--sdn-small"]) {
             document.body.style.removeProperty(v);
         }
     }
@@ -66,10 +58,8 @@ export class AutoResize {
     applyVars() {
         const s = this.plugin.settings;
         const st = document.body.style;
-        st.setProperty("--sdn-sidebar-full", `${s.sidebarFullWidth}px`);
-        st.setProperty("--sdn-sidebar-small", `${s.sidebarSmallWidth}px`);
-        st.setProperty("--sdn-pane-full", String(s.paneFullGrow));
-        st.setProperty("--sdn-pane-small", String(s.paneSmallGrow));
+        st.setProperty("--sdn-full", String(s.fullWidthPct));
+        st.setProperty("--sdn-small", String(s.smallWidthPct));
         this.refresh();
     }
 
@@ -177,40 +167,74 @@ class ResizeSettingsModal extends Modal {
         const { contentEl } = this;
         const s = this.plugin.settings;
         contentEl.empty();
+        contentEl.addClass("sdn-resize-modal");
         contentEl.createEl("h2", { text: "Auto-resize widths" });
+        contentEl.createEl("p", {
+            cls: "setting-item-description",
+            text: "Drag the two edges to set how wide Simple Daily Notes gets. The same widths are used for the right sidebar and for a note shown next to another note.",
+        });
 
-        const number = (
-            name: string,
-            desc: string,
-            key: keyof AutoResizeSettings,
-            min: number
-        ) => {
-            new Setting(contentEl)
-                .setName(name)
-                .setDesc(desc)
-                .addText((t) => {
-                    t.inputEl.type = "number";
-                    t.setValue(String(s[key]));
-                    t.onChange(async (v) => {
-                        const n = Number(v);
-                        if (!isFinite(n) || n < min) return;
-                        (s[key] as number) = n;
-                        await this.plugin.saveSettings();
-                        this.plugin.afterResizeSettingsChanged(false);
-                    });
-                });
+        const mock = contentEl.createDiv({ cls: "sdn-mock" });
+        mock.createDiv({ cls: "sdn-mock-other", text: "Other notes" });
+        const fullBar = mock.createDiv({ cls: "sdn-mock-bar sdn-mock-full" });
+        const smallBar = mock.createDiv({ cls: "sdn-mock-bar sdn-mock-small" });
+        const fullLabel = fullBar.createDiv({ cls: "sdn-mock-label" });
+        const smallLabel = smallBar.createDiv({ cls: "sdn-mock-label" });
+        fullBar.createDiv({ cls: "sdn-mock-handle" });
+        smallBar.createDiv({ cls: "sdn-mock-handle" });
+
+        const MIN = 10;
+        const MAX = 90;
+        const GAP = 5;
+        const draw = () => {
+            fullBar.style.width = `${s.fullWidthPct}%`;
+            smallBar.style.width = `${s.smallWidthPct}%`;
+            fullLabel.setText(`Full ${s.fullWidthPct}%`);
+            smallLabel.setText(`Small ${s.smallWidthPct}%`);
         };
+        draw();
 
-        contentEl.createEl("h4", { text: "Right sidebar" });
-        number("Full width", "Width in pixels when widened or locked.", "sidebarFullWidth", 200);
-        number("Small width", "Width in pixels when not hovered.", "sidebarSmallWidth", 150);
+        const drag = (bar: HTMLElement, key: "fullWidthPct" | "smallWidthPct") => {
+            const handle = bar.querySelector(".sdn-mock-handle") as HTMLElement;
+            handle.addEventListener("pointerdown", (down) => {
+                down.preventDefault();
+                handle.setPointerCapture(down.pointerId);
+                const rect = mock.getBoundingClientRect();
+                const move = (e: PointerEvent) => {
+                    let pct = Math.round(((rect.right - e.clientX) / rect.width) * 100);
+                    pct =
+                        key === "fullWidthPct"
+                            ? Math.min(MAX, Math.max(s.smallWidthPct + GAP, pct))
+                            : Math.min(s.fullWidthPct - GAP, Math.max(MIN, pct));
+                    s[key] = pct;
+                    draw();
+                    this.plugin.autoResize.applyVars();
+                };
+                const up = async () => {
+                    handle.removeEventListener("pointermove", move);
+                    handle.removeEventListener("pointerup", up);
+                    await this.plugin.saveSettings();
+                };
+                handle.addEventListener("pointermove", move);
+                handle.addEventListener("pointerup", up);
+            });
+        };
+        drag(fullBar, "fullWidthPct");
+        drag(smallBar, "smallWidthPct");
 
-        contentEl.createEl("h4", { text: "Note shown next to another note" });
-        number("Full width", "Share of the space compared to the other pane (3 means three times as wide).", "paneFullGrow", 0.1);
-        number("Small width", "Share of the space when not hovered.", "paneSmallGrow", 0.1);
-
-        contentEl.createEl("h4", { text: "Hover" });
-        number("Delay before widening", "In milliseconds. Shrinking back is immediate.", "hoverDelayMs", 0);
+        new Setting(contentEl)
+            .setName("Delay before widening")
+            .setDesc("Shrinking back is immediate.")
+            .addSlider((sl) =>
+                sl
+                    .setLimits(0, 3000, 100)
+                    .setValue(s.hoverDelayMs)
+                    .setDynamicTooltip()
+                    .onChange(async (v) => {
+                        s.hoverDelayMs = v;
+                        await this.plugin.saveSettings();
+                    })
+            );
     }
 
     onClose() {

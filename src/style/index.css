@@ -234,18 +234,73 @@ body.daily-notes-hide-backlinks .daily-note-view .embedded-backlinks {
 }
 
 /* Auto-resize: right sidebar and a pane next to another note.
-   Widths come from CSS variables set by the plugin. */
+   Widths are percentages of the window width, set by the plugin. */
 .workspace-split.mod-right-split.sdn-auto:not(.is-sidedock-collapsed) {
-    width: var(--sdn-sidebar-small) !important;
+    width: calc(var(--sdn-small) * 1vw) !important;
     transition: width 200ms ease;
 }
 .workspace-split.mod-right-split.sdn-auto.sdn-wide:not(.is-sidedock-collapsed) {
-    width: var(--sdn-sidebar-full) !important;
+    width: calc(var(--sdn-full) * 1vw) !important;
 }
 .workspace-split.mod-vertical.mod-root > .workspace-tabs.sdn-auto.sdn-auto {
-    flex-grow: var(--sdn-pane-small) !important;
-    transition: flex-grow 200ms ease;
+    flex: 0 0 calc(var(--sdn-small) * 1vw) !important;
+    max-width: 90%;
+    transition: flex-basis 200ms ease;
 }
 .workspace-split.mod-vertical.mod-root > .workspace-tabs.sdn-auto.sdn-auto.sdn-wide {
-    flex-grow: var(--sdn-pane-full) !important;
+    flex-basis: calc(var(--sdn-full) * 1vw) !important;
+}
+
+/* Width editor in the lock button's settings window */
+.sdn-mock {
+    position: relative;
+    height: 90px;
+    margin: var(--size-4-4) 0;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    background: var(--background-secondary);
+    overflow: hidden;
+    user-select: none;
+}
+.sdn-mock-other {
+    padding: var(--size-4-2);
+    color: var(--text-faint);
+    font-size: var(--font-ui-small);
+}
+.sdn-mock-bar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    box-sizing: border-box;
+}
+.sdn-mock-full {
+    background: var(--background-modifier-hover);
+    border-left: 2px solid var(--text-muted);
+}
+.sdn-mock-small {
+    background: var(--interactive-accent);
+    opacity: 0.85;
+}
+.sdn-mock-label {
+    position: absolute;
+    bottom: var(--size-2-2);
+    left: var(--size-4-2);
+    font-size: var(--font-ui-smaller);
+    color: var(--text-on-accent);
+    white-space: nowrap;
+}
+.sdn-mock-full .sdn-mock-label {
+    top: var(--size-2-2);
+    bottom: auto;
+    color: var(--text-muted);
+}
+.sdn-mock-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -6px;
+    width: 12px;
+    cursor: ew-resize;
+    touch-action: none;
 }
