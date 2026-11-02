@@ -29,6 +29,7 @@ import {
 import { createUpDownNavigationExtension } from "./component/UpAndDownNavigate";
 // import { setActiveEditorExt } from "./component/SetActiveEditor";
 import { DAILY_NOTE_VIEW_TYPE, DailyNoteView } from "./dailyNoteView";
+import { AutoResize } from "./autoResize";
 
 export default class DailyNoteViewPlugin extends Plugin {
     private view: DailyNoteView;
@@ -36,6 +37,7 @@ export default class DailyNoteViewPlugin extends Plugin {
     private lastCheckedDay: string;
 
     settings: DailyNoteSettings;
+    autoResize: AutoResize;
 
     async onload() {
         this.addSettingTab(new DailyNoteSettingTab(this.app, this));
@@ -104,6 +106,9 @@ export default class DailyNoteViewPlugin extends Plugin {
 
         this.initCssRules();
 
+        this.autoResize = new AutoResize(this);
+        this.autoResize.start();
+
         // Create daily note and open the Simple Daily Notes on startup if enabled
         if (this.settings.createAndOpenOnStartup) {
             this.app.workspace.onLayoutReady(async () => {
@@ -138,6 +143,7 @@ export default class DailyNoteViewPlugin extends Plugin {
     }
 
     onunload() {
+        this.autoResize?.stop();
         this.app.workspace.detachLeavesOfType(DAILY_NOTE_VIEW_TYPE);
         document.body.toggleClass("daily-notes-hide-frontmatter", false);
         document.body.toggleClass("daily-notes-hide-backlinks", false);
@@ -356,6 +362,21 @@ export default class DailyNoteViewPlugin extends Plugin {
 
     async saveSettings() {
         await this.saveData(this.settings);
+    }
+
+    /** Lock or unlock the wide state of the area that shows Simple Daily Notes. */
+    async toggleLockedWide() {
+        this.settings.lockedWide = !this.settings.lockedWide;
+        await this.saveSettings();
+        this.afterResizeSettingsChanged(false);
+    }
+
+    afterResizeSettingsChanged(save = true) {
+        if (save) this.saveSettings();
+        this.autoResize.applyVars();
+        for (const leaf of this.app.workspace.getLeavesOfType(DAILY_NOTE_VIEW_TYPE)) {
+            (leaf.view as DailyNoteView).updateLockButtons?.();
+        }
     }
 
     public applySettingsToOpenViews(): void {

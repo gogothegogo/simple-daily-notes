@@ -9,8 +9,10 @@ import {
     Modal,
     App,
     ButtonComponent,
+    setIcon,
 } from "obsidian";
 import { TimeRange, TimeField, SelectionMode, LayoutMode } from "./types/time";
+import { showLockMenu } from "./autoResize";
 import DailyNoteEditorView from "./component/DailyNoteEditorView.svelte";
 export const DAILY_NOTE_VIEW_TYPE = "daily-note-editor-view";
 
@@ -269,7 +271,26 @@ export class DailyNoteView extends ItemView {
         });
 
         // Added first, so it renders rightmost in the view header.
-        this.addAction("layout-list", "Select layout", (e) => {
+        // The view header is hidden in the sidebars, so every action is also
+        // drawn as a toolbar inside the view (CSS shows it only in sidebars).
+        const toolbar = createDiv({ cls: "sdn-toolbar" });
+        this.contentEl.prepend(toolbar);
+        const addAction = (
+            icon: string,
+            title: string,
+            cb: (e: MouseEvent) => void
+        ): HTMLElement[] => {
+            const headerEl = this.addAction(icon, title, cb as any) as HTMLElement;
+            const btn = toolbar.createDiv({
+                cls: "clickable-icon sdn-toolbar-btn",
+                attr: { "aria-label": title },
+            });
+            setIcon(btn, icon);
+            btn.addEventListener("click", (e) => cb(e));
+            return [headerEl, btn];
+        };
+
+        addAction("layout-list", "Select layout", (e) => {
             const menu = new Menu();
             const addLayoutOption = (title: string, icon: string, mode: LayoutMode) => {
                 menu.addItem((item) => {
@@ -288,7 +309,7 @@ export class DailyNoteView extends ItemView {
             menu.showAtMouseEvent(e);
         });
 
-        this.addAction("clock", "Select time field", (e) => {
+        addAction("clock", "Select time field", (e) => {
             const menu = new Menu();
 
             // Add time field selection options
@@ -314,7 +335,7 @@ export class DailyNoteView extends ItemView {
         });
 
         // Add action for selecting view mode
-        this.addAction("layers-2", "Select view mode", (e) => {
+        addAction("layers-2", "Select view mode", (e) => {
             const menu = new Menu();
 
             // Add mode selection options
@@ -394,7 +415,7 @@ export class DailyNoteView extends ItemView {
 
         // Add action for selecting time field (for folder and tag modes)
 
-        this.addAction("calendar-range", "Select date range", (e) => {
+        addAction("calendar-range", "Select date range", (e) => {
             const menu = new Menu();
             // Add range selection options
             const addRangeOption = (title: string, range: TimeRange) => {
@@ -435,7 +456,7 @@ export class DailyNoteView extends ItemView {
             menu.showAtMouseEvent(e as MouseEvent);
         });
 
-        this.addAction("refresh", "Refresh", () => {
+        addAction("refresh", "Refresh", () => {
             if (this.view) {
                 // Tell the Svelte component to check for daily notes
                 this.view.check();
@@ -451,8 +472,35 @@ export class DailyNoteView extends ItemView {
             }
         });
 
+        // Lock the area wide; right click for the auto-resize settings
+        this.lockEls = addAction("lock", "Lock wide", () => {
+            this.plugin.toggleLockedWide();
+        });
+        for (const el of this.lockEls) {
+            el.addClass("sdn-lock");
+            el.addEventListener("contextmenu", (e: MouseEvent) => {
+                e.preventDefault();
+                showLockMenu(this.plugin, e);
+            });
+        }
+        this.updateLockButtons();
+
         this.app.vault.on("create", this.onFileCreate);
         this.app.vault.on("delete", this.onFileDelete);
+    }
+
+    lockEls: HTMLElement[] = [];
+
+    public updateLockButtons() {
+        const locked = this.plugin.settings.lockedWide;
+        for (const el of this.lockEls) {
+            el.toggleClass("is-active", locked);
+            setIcon(el, locked ? "lock" : "unlock");
+            el.setAttribute(
+                "aria-label",
+                locked ? "Unlock width (right click for settings)" : "Lock wide (right click for settings)"
+            );
+        }
     }
 
     onPaneMenu(

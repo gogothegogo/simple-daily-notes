@@ -1,8 +1,9 @@
 import DailyNoteViewPlugin from "./dailyNoteViewIndex";
 import { App, debounce, PluginSettingTab, Setting, Modal } from "obsidian";
 import { LayoutMode, SelectionMode, TimeField, TimeRange } from "./types/time";
+import { AutoResizeSettings, AUTO_RESIZE_DEFAULTS } from "./autoResize";
 
-export interface DailyNoteSettings {
+export interface DailyNoteSettings extends AutoResizeSettings {
     hideFrontmatter: boolean;
     hideBacklinks: boolean;
     createAndOpenOnStartup: boolean;
@@ -39,6 +40,8 @@ export const DEFAULT_SETTINGS: DailyNoteSettings = {
     footerNotePath: "",
 
     preset: [],
+
+    ...AUTO_RESIZE_DEFAULTS,
 };
 
 export class DailyNoteSettingTab extends PluginSettingTab {

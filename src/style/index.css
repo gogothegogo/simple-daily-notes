@@ -217,3 +217,35 @@ body.daily-notes-hide-backlinks .daily-note-view .embedded-backlinks {
 .is-phone .mod-root .workspace-tabs:not(.mod-visible):has(.daily-note-view) {
     display: flex !important;
 }
+
+/* In-view toolbar: the view header is hidden in the sidebars */
+.sdn-toolbar {
+    display: none;
+    justify-content: flex-end;
+    gap: var(--size-2-2);
+    padding: var(--size-2-2) var(--size-4-2);
+}
+.workspace-split.mod-left-split .sdn-toolbar,
+.workspace-split.mod-right-split .sdn-toolbar {
+    display: flex;
+}
+.sdn-lock.is-active {
+    color: var(--interactive-accent);
+}
+
+/* Auto-resize: right sidebar and a pane next to another note.
+   Widths come from CSS variables set by the plugin. */
+.workspace-split.mod-right-split.sdn-auto:not(.is-sidedock-collapsed) {
+    width: var(--sdn-sidebar-small) !important;
+    transition: width 200ms ease;
+}
+.workspace-split.mod-right-split.sdn-auto.sdn-wide:not(.is-sidedock-collapsed) {
+    width: var(--sdn-sidebar-full) !important;
+}
+.workspace-split.mod-vertical.mod-root > .workspace-tabs.sdn-auto.sdn-auto {
+    flex-grow: var(--sdn-pane-small) !important;
+    transition: flex-grow 200ms ease;
+}
+.workspace-split.mod-vertical.mod-root > .workspace-tabs.sdn-auto.sdn-auto.sdn-wide {
+    flex-grow: var(--sdn-pane-full) !important;
+}
